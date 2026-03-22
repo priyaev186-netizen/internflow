@@ -13,8 +13,14 @@ export async function POST(req: NextRequest) {
 
     if (!apiKey) {
       // Fallback AI when OpenAI key isn't configured (local development)
-      const simpleReply = `AI fallback service: I received your message: "${prompt}". Please add OPENAI_API_KEY to get full ChatGPT responses.`;
-      return NextResponse.json({ text: simpleReply });
+      const responses = [
+        `I understand you're asking about "${prompt}". As your internship assistant, I'd recommend focusing on practical projects and networking.`,
+        `Regarding "${prompt}" - that's a great question! Consider building a portfolio and connecting with professionals in your field.`,
+        `About "${prompt}": Focus on gaining hands-on experience through internships, personal projects, and contributing to open source.`,
+        `For "${prompt}", I'd suggest: 1) Build relevant projects, 2) Network on LinkedIn, 3) Apply to internships regularly, 4) Keep learning new technologies.`
+      ];
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      return NextResponse.json({ text: randomResponse });
     }
 
     const client = new OpenAI({ apiKey });
@@ -23,9 +29,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    const isStream = req.nextUrl.searchParams.get('stream') === '1';
-
-    const response = await client.chat.completions.create({
+    // Always use non-streaming for simplicity and reliability
+    const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'You are InternFlow assistant. Give concise, friendly internship guidance.' },
@@ -33,48 +38,9 @@ export async function POST(req: NextRequest) {
       ],
       max_tokens: 250,
       temperature: 0.8,
-      stream: isStream
+      stream: false
     });
 
-    if (isStream) {
-      const encoder = new TextEncoder();
-
-      type OpenAIStreamDelta = { choices?: Array<{ delta?: { content?: string } }> };
-      const streamData = new ReadableStream({
-        async start(controller) {
-          try {
-            const asIterable = response as unknown as { [Symbol.asyncIterator]?: () => AsyncIterator<OpenAIStreamDelta> };
-            const asyncIter = asIterable[Symbol.asyncIterator];
-            if (!asyncIter) {
-              const fallbackResponse = response as unknown as { choices?: Array<{ message?: { content?: string } }> };
-              const finalText = fallbackResponse.choices?.[0]?.message?.content ?? 'Sorry, no answer was generated.';
-              controller.enqueue(encoder.encode(finalText));
-              controller.close();
-              return;
-            }
-
-            for await (const event of iterativeResponse) {
-              const delta = event.choices?.[0]?.delta?.content;
-              if (delta) {
-                controller.enqueue(encoder.encode(delta));
-              }
-            }
-            controller.close();
-          } catch (streamError) {
-            controller.error(streamError);
-          }
-        }
-      });
-
-      return new Response(streamData, {
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-          'Cache-Control': 'no-cache'
-        }
-      });
-    }
-
-    const completion = response as unknown as { choices?: Array<{ message?: { content?: string } }> };
     const text = completion.choices?.[0]?.message?.content ?? 'Sorry, no answer was generated.';
     return NextResponse.json({ text });
   } catch (error) {

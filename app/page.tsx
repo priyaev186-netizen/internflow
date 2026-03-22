@@ -92,6 +92,8 @@ export default function Home () {
     publication_date: string;
     job_type?: string;
     salary?: string;
+    skills?: string[];
+    description?: string;
   };
 
   const [liveInternships, setLiveInternships] = useState<LiveInternship[]>([]);
@@ -100,6 +102,43 @@ export default function Home () {
   const [liveInternshipQuery, setLiveInternshipQuery] = useState('intern');
   const [savedJobIds, setSavedJobIds] = useState<number[]>([]);
   const [applicationStatus, setApplicationStatus] = useState<Record<number, 'Saved' | 'Applied' | 'Interview' | 'Offer'>>({});
+  const [selectedInternship, setSelectedInternship] = useState<LiveInternship | null>(null);
+  const [similarInternships, setSimilarInternships] = useState<LiveInternship[]>([]);
+
+  // Function to find similar internships based on skills and category
+  const findSimilarInternships = (job: LiveInternship, allJobs: LiveInternship[]): LiveInternship[] => {
+    const jobSkills = job.skills || [];
+    const jobCategory = job.category.toLowerCase();
+
+    return allJobs
+      .filter(j => j.id !== job.id)
+      .map(j => {
+        let score = 0;
+        const jSkills = j.skills || [];
+        const jCategory = j.category.toLowerCase();
+
+        // Category match
+        if (jCategory === jobCategory) score += 5;
+
+        // Skill matches
+        jobSkills.forEach(skill => {
+          if (jSkills.some(jSkill => jSkill.toLowerCase().includes(skill.toLowerCase()))) {
+            score += 3;
+          }
+        });
+
+        // Company similarity (same industry)
+        const techCompanies = ['Google', 'Meta', 'Amazon', 'Apple', 'Microsoft', 'Netflix'];
+        const isJobTech = techCompanies.some(c => job.company.includes(c));
+        const isJTech = techCompanies.some(c => j.company.includes(c));
+        if (isJobTech && isJTech) score += 2;
+
+        return { ...j, similarityScore: score };
+      })
+      .filter(j => (j as any).similarityScore > 0)
+      .sort((a, b) => ((b as any).similarityScore || 0) - ((a as any).similarityScore || 0))
+      .slice(0, 3);
+  };
 
   const skillGapSuggestions = useMemo(() => {
     const userSkills = resumeData.skills
@@ -326,6 +365,11 @@ export default function Home () {
       }
 
       setLiveInternships(data.internships || []);
+      setLiveInternshipQuery(query);
+
+      // Clear selected internship when doing a new search
+      setSelectedInternship(null);
+      setSimilarInternships([]);
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : 'Unknown error fetching internships';
       setLiveInternshipsError(errMessage);
@@ -437,6 +481,12 @@ export default function Home () {
       setSavedJobIds((prev) => (prev.includes(jobId) ? prev : [...prev, jobId]));
       setApplicationStatus((prev) => ({ ...prev, [jobId]: status }));
     }
+  };
+
+  const selectInternship = (job: LiveInternship) => {
+    setSelectedInternship(job);
+    const similar = findSimilarInternships(job, liveInternships);
+    setSimilarInternships(similar);
   };
 
   useEffect(() => {
@@ -605,17 +655,16 @@ export default function Home () {
         )}
 
         {/* 2. HERO & SEARCH SECTION */}
-        <section className="text-center mb-16 fade-in">
+        <section className="text-center mb-12 fade-in">
           <h2 className="text-5xl md:text-6xl font-extrabold mb-6 tracking-tight text-blue-600">
             <span className="uppercase">SMART PATH</span>
             <span className="uppercase"> TOWARDS YOUR </span>
             <span>Dream Internship.</span>
           </h2>
           <p className="text-lg text-gray-500 mb-8 max-w-2xl mx-auto">
-            Our AI analyzes your VTU coursework and skill progress to match you with 
-            the perfect industry opportunities.
+            Search internships by skills, companies, or roles. Get matched with opportunities from top tech companies.
           </p>
-          <div className="relative max-w-2xl mx-auto group">
+          <div className="relative max-w-2xl mx-auto group mb-6">
             <input
               type="text"
               value={skillSearch}
@@ -635,7 +684,220 @@ export default function Home () {
           </div>
         </section>
 
-        {/* 2a. PROGRESSION ACTIONS */}
+        {/* 2b. RECOMMENDED INTERNSHIPS - Moved here for better UX */}
+        <section className={`max-w-5xl mx-auto mt-8 p-6 rounded-3xl shadow-sm ${darkMode ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-gray-100'}`}>
+          <h3 className={`font-bold text-xl ${darkMode ? 'text-slate-100' : 'text-gray-800'}`}>Internship Results</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+            <div className="md:col-span-2 flex flex-wrap gap-2">
+              <input
+                value={liveInternshipQuery}
+                onChange={(e) => setLiveInternshipQuery(e.target.value)}
+                placeholder="Refine search (e.g., Java, Verilog, React)"
+                className="flex-1 min-w-[220px] px-3 py-2 rounded-xl border border-gray-300 bg-white/90 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <button
+                onClick={() => fetchLiveInternships(liveInternshipQuery)}
+                className="px-4 py-2 rounded-xl text-white bg-blue-600 hover:bg-blue-700 transition active:scale-95"
+                type="button"
+              >
+                Refresh
+              </button>
+              <button
+                onClick={generateInterviewQuestions}
+                disabled={!resumeData.skills.trim() || isGeneratingInterview}
+                className="px-4 py-2 rounded-xl text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:brightness-110 active:scale-95 transition disabled:opacity-50"
+                type="button"
+              >
+                {isGeneratingInterview ? 'Generating ⋯' : 'Generate Interview Questions'}
+              </button>
+            </div>
+            <div className="flex items-center justify-end">
+              <span className={`text-sm ${darkMode ? 'text-slate-300' : 'text-gray-500'}`}>
+                Search by skills, companies, or roles
+              </span>
+            </div>
+          </div>
+
+          {liveInternshipsError && (
+            <div className="mt-4 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">
+              {liveInternshipsError}
+            </div>
+          )}
+          {liveInternshipsLoading && (
+            <div className="mt-4 text-sm text-blue-600">Loading internships…</div>
+          )}
+          {!liveInternshipsLoading && savedJobIds.length > 0 && (
+            <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-200">
+              <h4 className="text-sm font-bold mb-2">Saved Internship Tracker</h4>
+              <div className="text-xs text-gray-700">
+                {savedJobIds.map((jobId) => {
+                  const saved = liveInternships.find((j) => j.id === jobId);
+                  const status = applicationStatus[jobId] || 'Saved';
+                  return (
+                    <div key={jobId} className="mb-1">
+                      {saved ? `${saved.title} (${saved.company})` : `Job #${jobId}`} - {status}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {!liveInternshipsLoading && liveInternships.length === 0 && !liveInternshipsError && (
+            <p className={`mt-4 ${darkMode ? 'text-slate-300' : 'text-gray-500'}`}>
+              No live internships found for this query. Try another one.
+            </p>
+          )}
+
+          {interviewQuestions.length > 0 && (
+            <div className="mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50">
+              <h4 className="font-semibold mb-2">Interview Question Set</h4>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+                {interviewQuestions.map((q, index) => (
+                  <li key={`${q}-${index}`} className="text-left">{q}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {liveInternships.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              {liveInternships.map((job) => {
+                const isSaved = savedJobIds.includes(job.id);
+                const status = applicationStatus[job.id] || (isSaved ? 'Saved' : 'Saved');
+
+                return (
+                  <div key={job.id} className='p-4 rounded-2xl glass-card hover:shadow-md transition'>
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <h4 className={`font-semibold ${darkMode ? 'text-slate-100' : 'text-gray-800'}`}>{job.title}</h4>
+                        <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>{job.company} • {job.location}</p>
+                        <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{job.category} • {job.job_type || 'Internship'}</p>
+                        {job.salary && <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>💰 {job.salary}</p>}
+                        {job.skills && job.skills.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {job.skills.slice(0, 4).map((skill, idx) => (
+                              <span key={idx} className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                                {skill}
+                              </span>
+                            ))}
+                            {job.skills.length > 4 && (
+                              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                                +{job.skills.length - 4} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <span className='text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800 whitespace-nowrap'>
+                        {new Date(job.publication_date).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => toggleSaveJob(job.id)}
+                        type="button"
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold ${isSaved ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      >
+                        {isSaved ? 'Unsave' : 'Save'}
+                      </button>
+
+                      <select
+                        value={status}
+                        onChange={(e) => setJobStatus(job.id, e.target.value as 'Saved' | 'Applied' | 'Interview' | 'Offer')}
+                        className="text-xs px-2 py-1 rounded-lg border border-gray-300 bg-white"
+                      >
+                        <option value="Saved">Saved</option>
+                        <option value="Applied">Applied</option>
+                        <option value="Interview">Interview</option>
+                        <option value="Offer">Offer</option>
+                      </select>
+
+                      <button
+                        onClick={() => selectInternship(job)}
+                        className="text-xs px-3 py-1 rounded-lg border border-purple-500 text-purple-600 hover:bg-purple-50"
+                        type="button"
+                      >
+                        Similar Jobs
+                      </button>
+
+                      <a
+                        href={job.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs px-3 py-1 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50"
+                      >
+                        Apply Now
+                      </a>
+                    </div>
+                    <div className="mt-2 text-[11px] text-gray-500">
+                      Application status: <span className="font-bold">{status}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            !liveInternshipsLoading && (
+              <p className={`mt-3 ${darkMode ? 'text-slate-300' : 'text-gray-500'}`}>
+                No live internships available right now. Try a broader keyword.
+              </p>
+            )
+          )}
+
+          {/* Similar Internships Section */}
+          {selectedInternship && similarInternships.length > 0 && (
+            <div className="mt-6 p-4 rounded-xl border border-purple-200 bg-purple-50/50">
+              <h4 className="font-semibold mb-3 text-purple-800">
+                Similar to "{selectedInternship.title}" at {selectedInternship.company}
+              </h4>
+              <div className="space-y-2">
+                {similarInternships.map((job) => {
+                  const isSaved = savedJobIds.includes(job.id);
+                  const status = applicationStatus[job.id] || (isSaved ? 'Saved' : 'Saved');
+
+                  return (
+                    <div key={`similar-${job.id}`} className='p-3 rounded-lg bg-white border border-purple-100 hover:shadow-sm transition'>
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="flex-1">
+                          <h5 className="font-medium text-gray-800 text-sm">{job.title}</h5>
+                          <p className="text-xs text-gray-600">{job.company} • {job.location}</p>
+                          <p className="text-xs text-gray-500">{job.category}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => toggleSaveJob(job.id)}
+                            type="button"
+                            className={`px-2 py-1 rounded text-xs font-semibold ${isSaved ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                          >
+                            {isSaved ? '✓' : '+'}
+                          </button>
+                          <a
+                            href={job.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2 py-1 rounded text-xs border border-blue-500 text-blue-600 hover:bg-blue-50"
+                          >
+                            Apply
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedInternship(null);
+                  setSimilarInternships([]);
+                }}
+                className="mt-3 text-xs text-purple-600 hover:text-purple-800"
+                type="button"
+              >
+                Hide similar jobs
+              </button>
+            </div>
+          )}
+        </section>
         <section className="mb-12 fade-in">
           <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
@@ -888,141 +1150,7 @@ export default function Home () {
           )}
         </section>
 
-        {/* 4b. RECOMMENDED INTERNSHIPS */}
-        <section className={`max-w-5xl mx-auto mt-6 p-6 rounded-3xl shadow-sm ${darkMode ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-gray-100'}`}>
-          <h3 className={`font-bold text-xl ${darkMode ? 'text-slate-100' : 'text-gray-800'}`}>Recommended Internships</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-            <div className="md:col-span-2 flex flex-wrap gap-2">
-              <input
-                value={liveInternshipQuery}
-                onChange={(e) => setLiveInternshipQuery(e.target.value)}
-                placeholder="Search internships (e.g., Java, Verilog, React)"
-                className="flex-1 min-w-[220px] px-3 py-2 rounded-xl border border-gray-300 bg-white/90 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-              <button
-                onClick={() => fetchLiveInternships(liveInternshipQuery)}
-                className="px-4 py-2 rounded-xl text-white bg-blue-600 hover:bg-blue-700 transition active:scale-95"
-                type="button"
-              >
-                Refresh
-              </button>
-              <button
-                onClick={generateInterviewQuestions}
-                disabled={!resumeData.skills.trim() || isGeneratingInterview}
-                className="px-4 py-2 rounded-xl text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:brightness-110 active:scale-95 transition disabled:opacity-50"
-                type="button"
-              >
-                {isGeneratingInterview ? 'Generating ⋯' : 'Generate Interview Questions'}
-              </button>
-            </div>
-            <div className="flex items-center justify-end">
-              <span className={`text-sm ${darkMode ? 'text-slate-300' : 'text-gray-500'}`}>
-                Showing live internships from Remotive API
-              </span>
-            </div>
-          </div>
-
-          {liveInternshipsError && (
-            <div className="mt-4 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">
-              {liveInternshipsError}
-            </div>
-          )}
-          {liveInternshipsLoading && (
-            <div className="mt-4 text-sm text-blue-600">Loading internships…</div>
-          )}
-          {!liveInternshipsLoading && savedJobIds.length > 0 && (
-            <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-200">
-              <h4 className="text-sm font-bold mb-2">Saved Internship Tracker</h4>
-              <div className="text-xs text-gray-700">
-                {savedJobIds.map((jobId) => {
-                  const saved = liveInternships.find((j) => j.id === jobId);
-                  const status = applicationStatus[jobId] || 'Saved';
-                  return (
-                    <div key={jobId} className="mb-1">
-                      {saved ? `${saved.title} (${saved.company})` : `Job #${jobId}`} - {status}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {!liveInternshipsLoading && liveInternships.length === 0 && !liveInternshipsError && (
-            <p className={`mt-4 ${darkMode ? 'text-slate-300' : 'text-gray-500'}`}>
-              No live internships found for this query. Try another one.
-            </p>
-          )}
-
-          {interviewQuestions.length > 0 && (
-            <div className="mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50">
-              <h4 className="font-semibold mb-2">Interview Question Set</h4>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
-                {interviewQuestions.map((q, index) => (
-                  <li key={`${q}-${index}`} className="text-left">{q}</li>
-                ))}
-              </ol>
-            </div>
-          )}
-
-          {liveInternships.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              {liveInternships.map((job) => {
-                const isSaved = savedJobIds.includes(job.id);
-                const status = applicationStatus[job.id] || (isSaved ? 'Saved' : 'Saved');
-
-                return (
-                  <div key={job.id} className='p-4 rounded-2xl glass-card hover:shadow-md transition'>
-                    <div className="flex justify-between items-start gap-4">
-                      <div>
-                        <h4 className={`font-semibold ${darkMode ? 'text-slate-100' : 'text-gray-800'}`}>{job.title}</h4>
-                        <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>{job.company} • {job.location}</p>
-                        <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{job.category} • {job.job_type || 'Internship'}</p>
-                      </div>
-                      <span className='text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800'>{new Date(job.publication_date).toLocaleDateString()}</span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={() => toggleSaveJob(job.id)}
-                        type="button"
-                        className={`px-3 py-1 rounded-lg text-xs font-semibold ${isSaved ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                      >
-                        {isSaved ? 'Unsave' : 'Save'}
-                      </button>
-
-                      <select
-                        value={status}
-                        onChange={(e) => setJobStatus(job.id, e.target.value as 'Saved' | 'Applied' | 'Interview' | 'Offer')}
-                        className="text-xs px-2 py-1 rounded-lg border border-gray-300 bg-white"
-                      >
-                        <option value="Saved">Saved</option>
-                        <option value="Applied">Applied</option>
-                        <option value="Interview">Interview</option>
-                        <option value="Offer">Offer</option>
-                      </select>
-
-                      <a
-                        href={job.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs px-3 py-1 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50"
-                      >
-                        View
-                      </a>
-                    </div>
-                    <div className="mt-2 text-[11px] text-gray-500">
-                      Application status: <span className="font-bold">{status}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            !liveInternshipsLoading && (
-              <p className={`mt-3 ${darkMode ? 'text-slate-300' : 'text-gray-500'}`}>
-                No live internships available right now. Try a broader keyword.
-              </p>
-            )
-          )}
-        </section>
+        {/* 4b. RECOMMENDED INTERNSHIPS - Moved to after hero section for better UX */}
 
       </div>
 
