@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InternFlow
+
+A comprehensive internship management platform built with Next.js 15, featuring AI-powered chat assistance, real-time job feeds, resume building, and job tracking capabilities.
+
+## Features
+
+- 🔍 **Real-time Internship Feed** - Search and browse internships from Remotive API
+- 🤖 **AI Chat Assistant** - Get help with career advice, resume reviews, and interview prep
+- 📄 **Resume Builder** - Create and customize professional resumes
+- 📋 **Job Tracker** - Save favorite jobs and track application status
+- 📊 **Skill Gap Analysis** - Identify areas for improvement based on job requirements
+- 🎯 **Interview Questions** - Practice with role-specific interview questions
+- 📈 **Progress Tracking** - Monitor your skill development over time
+- 🔐 **Authentication** - Secure user authentication with NextAuth.js
+
+## Tech Stack
+
+- **Frontend**: Next.js 15, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Authentication**: NextAuth.js
+- **AI**: OpenAI API integration
+- **Styling**: Tailwind CSS with dark mode support
+- **Data**: Remotive API for internships, file-based persistence
 
 ## Getting Started
 
-First, run the development server:
-
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/priyaev186-netizen/internflow.git
+cd internflow
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up environment variables:
+Create a `.env.local` file with:
+```env
+NEXTAUTH_SECRET=your-secret-here
+NEXTAUTH_URL=http://localhost:3000
+OPENAI_API_KEY=your-openai-key-here
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Run the development server:
+```bash
+npm run dev
+```
 
-## Learn More
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-To learn more about Next.js, take a look at the following resources:
+## API Routes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `GET /api/internships` - Fetch internship listings
+- `POST /api/chat` - AI chat functionality
+- `GET/POST/PUT/DELETE /api/job-tracker` - Job tracking operations
+- `GET/POST /api/auth/[...nextauth]` - Authentication
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+internflow/
+├── app/
+│   ├── api/
+│   │   ├── auth/[...nextauth]/
+│   │   ├── chat/
+│   │   ├── internships/
+│   │   └── job-tracker/
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── page.tsx
+│   └── providers.tsx
+├── public/
+├── package.json
+├── tsconfig.json
+└── README.md
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Contributing
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit your changes: `git commit -am 'Add feature'`
+4. Push to the branch: `git push origin feature-name`
+5. Submit a pull request
+
+## License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## Deployment
+
+The app can be deployed to Vercel, Netlify, or any platform supporting Next.js:
+
+```bash
+npm run build
+npm start
+```
+
+For production deployment, ensure all environment variables are properly configured.
